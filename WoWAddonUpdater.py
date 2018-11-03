@@ -61,15 +61,17 @@ class AddonUpdater:
                 line = line.rstrip("\n")
                 if not line or line.startswith("#"):
                     continue
-                if (
-                    "|" in line
-                ):  # Expected input format: "mydomain.com/myzip.zip" or "mydomain.com/myzip.zip|subfolder"
-                    subfolder = line.split("|")[1]
-                    line = line.split("|")[0]
-                else:
-                    subfolder = ""
-                addonName = SiteHandler.getAddonName(line)
-                currentVersion = SiteHandler.getCurrentVersion(line)
+                # Expected input format: "mydomain.com/myzip.zip" or "mydomain.com/myzip.zip|subfolder"
+                line, *subfolder = line.split("|")
+                # TODO: Support more subfolders e.g. ElvUI and ElvUI_Config simultaneously
+                subfolder = subfolder[0] if subfolder else ""
+                site = SiteHandler.siteFactory(line)
+                if site is None:
+                    print(f"Unsupported site <{line}>")
+                    continue
+
+                addonName = site.name
+                currentVersion = site.version
                 if currentVersion is None:
                     currentVersion = "Not Available"
                 current_node.append(addonName)
@@ -77,13 +79,10 @@ class AddonUpdater:
                 installedVersion = self.getInstalledVersion(line, subfolder)
                 if not currentVersion == installedVersion:
                     print(
-                        "Installing/updating addon: "
-                        + addonName
-                        + " to version: "
-                        + currentVersion
-                        + "\n"
+                        f"Installing/updating addon '{addonName}' "
+                        f"to version <{currentVersion}>..."
                     )
-                    ziploc = SiteHandler.findZiploc(line)
+                    ziploc = site.downloadLink
                     install_success = False
                     install_success = self.getAddon(ziploc, subfolder)
                     current_node.append(self.getInstalledVersion(line, subfolder))
@@ -115,8 +114,7 @@ class AddonUpdater:
             r = requests.get(ziploc, stream=True)
             r.raise_for_status()  # Raise an exception for HTTP errors
             z = zipfile.ZipFile(BytesIO(r.content))
-            self.extract(z, ziploc, subfolder)
-            return True
+            return self.extract(z, ziploc, subfolder)
         except Exception:
             print("Failed to download or extract zip file for addon. Skipping...\n")
             return False
@@ -136,7 +134,9 @@ class AddonUpdater:
                     shutil.rmtree(destination_dir, ignore_errors=True)
                     shutil.copytree(subfolderPath, destination_dir)
             except Exception:
-                print("Failed to get subfolder " + subfolder)
+                print(f"Failed to get subfolder '{subfolder}' in <{destination_dir}>")
+                return False
+        return True
 
     def getInstalledVersion(self, addonpage, subfolder):
         addonName = SiteHandler.getAddonName(addonpage)

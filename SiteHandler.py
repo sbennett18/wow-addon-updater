@@ -1,9 +1,11 @@
-import packages.requests as requests
 import re
+from itertools import repeat
+from urllib.parse import urlsplit
+
+import packages.requests as requests
+
 
 # Site splitter
-
-
 def findZiploc(addonpage):
     # Curse
     if addonpage.startswith("https://mods.curse.com/addons/wow/"):
@@ -200,8 +202,6 @@ def getCurseDatastoreVersion(addonpage):
 
 
 # Curse Project
-
-
 def curseProject(addonpage):
     try:
         # Apparently the Curse project pages are sometimes sending people to WowAce now.
@@ -242,8 +242,6 @@ def getCurseProjectVersion(addonpage):
 
 
 # WowAce Project
-
-
 def wowAceProject(addonpage):
     try:
         return addonpage + "/files/latest"
@@ -271,8 +269,6 @@ def getWowAceProjectVersion(addonpage):
 
 
 # Tukui
-
-
 def tukui(addonpage):
     try:
         return addonpage + "/-/archive/master/elvui-master.zip"
@@ -301,8 +297,6 @@ def getTukuiVersion(addonpage):
 
 
 # Wowinterface
-
-
 def wowinterface(addonpage):
     downloadpage = addonpage.replace("info", "download")
     try:
@@ -334,3 +328,79 @@ def getWowinterfaceVersion(addonpage):
     except Exception:
         print("Failed to find version number for: " + addonpage)
         return ""
+
+
+###
+# SiteSplitter Base Class
+class SiteSplitter:
+    def __init__(self, addonpageParts):
+        self.url = addonpageParts.geturl()
+        self.netloc = addonpageParts.netloc
+        # Expected input format: "mydomain.com/myzip.zip" or "mydomain.com/myzip.zip|subfolder"
+        self.path, *self.subfolders = addonpageParts.path.split("|")
+        self.path = self.path.strip("/")  # Remove leading/trailing '/'s
+        if self.path.endswith("/files"):
+            self.name = self.path.rsplit("/", 1)[0]
+        else:
+            self.name = self.path
+
+
+###
+# Tukui
+class TukuiSite(SiteSplitter):
+    NETLOCS = ("git.tukui.org",)
+
+    def __init__(self, addonpageParts):
+        super().__init__(addonpageParts)
+        self.username, self.repository = self.name.split("/")
+
+    @property
+    def downloadLink(self):
+        try:
+            return self._downloadLink
+        except AttributeError:
+            pass
+
+        branch = "master"
+        archive = f"{self.repository}-{branch}.zip"
+        self._downloadLink = "/".join((self.url, "-", "archive", branch, archive))
+        return self._downloadLink
+
+    @property
+    def version(self):
+        try:
+            return self._version
+        except AttributeError:
+            pass
+
+        try:
+            response = requests.get(self.url)
+            response.raise_for_status()
+            content = str(response.content)
+            match = re.search(
+                r'<div class="commit-sha-group">\\n<div class="label label-monospace">\\n(?P<hash>[^<]+?)\\n</div>',
+                content,
+            )
+            self._version = match.group("hash").strip() if match else ""
+        except Exception as err:
+            self._version = ""
+            print("Failed to find version number for:", self.url)
+            print(err)
+
+        return self._version
+
+
+SITES = tuple(SiteSplitter.__subclasses__())
+SITES_MAP = dict()
+for site in SITES:
+    for nl in site.NETLOCS:
+        SITES_MAP[nl] = site
+
+
+def siteFactory(line):
+    parts = urlsplit(line)
+    try:
+        siteClass = SITES_MAP[parts.netloc]
+    except KeyError:
+        return None
+    return siteClass(parts)
