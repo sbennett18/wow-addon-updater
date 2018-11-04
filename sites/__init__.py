@@ -1,17 +1,19 @@
 from urllib.parse import urlsplit
+from pkgutil import iter_modules
 from importlib import import_module
-from .SiteSplitter import SiteSplitter
 
-SITES = tuple(SiteSplitter.__subclasses__())
-SITES_CLASS_MAP = dict()
-for site in SITES:
+for (_, name, _) in iter_modules(("sites",)):
+    import_module(f".{name}", __package__)
+
+SITES_MAP = dict()
+for site in tuple(SiteSplitter.SiteSplitter.__subclasses__()):
     for nl in site.NETLOCS:
-        SITES_CLASS_MAP[nl] = site
+        SITES_MAP[nl] = site
 
 
 def siteFactory(link):
     parts = urlsplit(link)
     try:
-        return SITES_CLASS_MAP[parts.netloc](parts)
+        return SITES_MAP[parts.netloc](parts)
     except KeyError:
         return None

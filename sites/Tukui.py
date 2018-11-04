@@ -1,3 +1,10 @@
+import re
+
+import packages.requests as requests
+
+from .SiteSplitter import SiteSplitter
+
+
 ###
 # Tukui
 class TukuiSite(SiteSplitter):
@@ -37,7 +44,7 @@ class TukuiSite(SiteSplitter):
             self._version = match.group("hash").strip() if match else ""
         except Exception as err:
             self._version = ""
-            print("Failed to find version number for:", self.url)
+            print(f"Failed to find version number for <{self.url}>")
             print(err)
 
         return self._version

@@ -6,6 +6,7 @@ import shutil
 import tempfile
 import SiteHandler
 import packages.requests as requests
+import sites
 
 
 def confirmExit():
@@ -65,7 +66,7 @@ class AddonUpdater:
                 line, *subfolder = line.split("|")
                 # TODO: Support more subfolders e.g. ElvUI and ElvUI_Config simultaneously
                 subfolder = subfolder[0] if subfolder else ""
-                site = SiteHandler.siteFactory(line)
+                site = sites.siteFactory(line)
                 if site is None:
                     print(f"Unsupported site <{line}>")
                     continue
